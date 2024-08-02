@@ -54,6 +54,22 @@ class DataCleaner:
             self.data[i] = line[:start] + modified_part + line[end:]
         self.history.append(self.data.copy())
 
+    def cleanse_range(self, start, end):
+        for i in range(len(self.data)):
+            line = self.data[i]
+            if len(line) >= end:
+                self.data[i] = line[:start] + line[end:]
+            else:
+                self.data[i] = line[:start]
+        self.history.append(self.data.copy())
+    
+    def cleanse_pattern_in_range(self, pattern, start, end):
+        regex = re.compile(rf"\s*{pattern}\s*")
+        for i in range(start, end):
+            if 0 <= i < len(self.data):
+                self.data[i] = regex.sub("", self.data[i])
+        self.history.append(self.data.copy())
+    
     def get_cleaned_data(self):
         return "\n".join(self.data)
     
@@ -132,6 +148,7 @@ class DataCleanerApp:
         
         self.range_entry = tk.Entry(range_frame, width=10)
         self.range_entry.grid(row=0, column=1, padx=5)
+        self.range_entry.bind('<Button-3>', self.set_range_from_selection)
         
         action_frame = tk.Frame(control_frame)
         action_frame.grid(row=2, column=0, columnspan=2, pady=5)
@@ -148,21 +165,30 @@ class DataCleanerApp:
         self.set_delimiters_button = tk.Button(action_frame, text="Set Delimiters from Pattern", command=self.set_delimiters_from_pattern)
         self.set_delimiters_button.grid(row=0, column=3, padx=5)
         
-        self.undo_button = tk.Button(action_frame, text="Undo", command=self.undo)
-        self.undo_button.grid(row=0, column=4, padx=5)
+        self.cleanse_range_button = tk.Button(action_frame, text="Cleanse Range", command=self.cleanse_range)
+        self.cleanse_range_button.grid(row=0, column=4, padx=5)
         
-        self.data_text = tk.Text(self.root, height=20, width=80, wrap=tk.NONE)
-        self.data_text.pack(pady=5)
+        self.cleanse_pattern_in_range_button = tk.Button(action_frame, text="Cleanse Pattern in Range", command=self.cleanse_pattern_in_range)
+        self.cleanse_pattern_in_range_button.grid(row=0, column=5, padx=5)
+        
+        self.undo_button = tk.Button(action_frame, text="Undo", command=self.undo)
+        self.undo_button.grid(row=0, column=6, padx=5)
+        
+        text_frame = tk.Frame(self.root)
+        text_frame.pack(fill=tk.BOTH, expand=True, pady=5)
+        
+        self.data_text = tk.Text(text_frame, height=20, width=80, wrap=tk.NONE)
+        self.data_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         self.data_text.bind('<ButtonRelease-1>', self.show_line_info)
         self.data_text.bind('<B1-Motion>', self.show_line_info)
+        
+        self.scrollbar_y = tk.Scrollbar(text_frame, orient=tk.VERTICAL, command=self.data_text.yview)
+        self.scrollbar_y.pack(side=tk.RIGHT, fill=tk.Y)
+        self.data_text.config(yscrollcommand=self.scrollbar_y.set)
         
         self.scrollbar_x = tk.Scrollbar(self.root, orient=tk.HORIZONTAL, command=self.data_text.xview)
         self.scrollbar_x.pack(side=tk.BOTTOM, fill=tk.X)
         self.data_text.config(xscrollcommand=self.scrollbar_x.set)
-        
-        self.scrollbar_y = tk.Scrollbar(self.root, orient=tk.VERTICAL, command=self.data_text.yview)
-        self.scrollbar_y.pack(side=tk.RIGHT, fill=tk.Y)
-        self.data_text.config(yscrollcommand=self.scrollbar_y.set)
         
         self.line_info_label = tk.Label(self.root, text="Line info: ")
         self.line_info_label.pack(pady=5)
@@ -184,6 +210,35 @@ class DataCleanerApp:
             self.cleaner.set_delimiters_from_pattern(pattern, start, end)
             self.update_main_textbox()
             messagebox.showinfo("CLEAN ME!!!!!", f"Delimiters set from pattern '{pattern}' in range {start}-{end}")
+        else:
+            messagebox.showerror("CLEAN ME!!!!!", "Please enter a valid pattern and range")
+    
+    def cleanse_range(self):
+        range_str = self.range_entry.get()
+        try:
+            start, end = map(int, range_str.split('-'))
+        except ValueError:
+            messagebox.showerror("CLEAN ME!!!!!", "Please enter a valid range (start-end)")
+            return
+        if start >= 0 and end > start:
+            self.cleaner.cleanse_range(start, end)
+            self.update_main_textbox()
+            messagebox.showinfo("CLEAN ME!!!!!", f"Cleared range {start}-{end}")
+        else:
+            messagebox.showerror("CLEAN ME!!!!!", "Please enter a valid range")
+    
+    def cleanse_pattern_in_range(self):
+        pattern = self.pattern_entry.get()
+        range_str = self.range_entry.get()
+        try:
+            start, end = map(int, range_str.split('-'))
+        except ValueError:
+            messagebox.showerror("CLEAN ME!!!!!", "Please enter a valid range (start-end)")
+            return
+        if pattern and start >= 0 and end > start:
+            self.cleaner.cleanse_pattern_in_range(pattern, start, end)
+            self.update_main_textbox()
+            messagebox.showinfo("CLEAN ME!!!!!", f"Cleared pattern '{pattern}' in range {start}-{end}")
         else:
             messagebox.showerror("CLEAN ME!!!!!", "Please enter a valid pattern and range")
     
@@ -269,15 +324,16 @@ class DataCleanerApp:
         self.data_text.see(line_start)
     
     def update_main_textbox(self):
+        current_width = int(self.data_text['width'])
+        current_height = int(self.data_text['height'])
         self.data_text.delete(1.0, tk.END)
         self.data_text.insert(tk.END, self.cleaner.get_cleaned_data())
-        self.adjust_text_box_size(self.cleaner.get_cleaned_data())
+        self.data_text.config(width=current_width, height=current_height)
     
     def undo(self):
         undone_data = self.cleaner.undo()
         self.data_text.delete(1.0, tk.END)
         self.data_text.insert(tk.END, undone_data)
-        self.adjust_text_box_size(undone_data)
     
     def save_cleaned_data(self):
         filename = filedialog.asksaveasfilename(title="Save Cleaned Data", defaultextension=".txt", filetypes=(("Text files", "*.txt"), ("All files", "*.*")))
@@ -323,6 +379,17 @@ class DataCleanerApp:
             if 0 <= line_index < len(self.cleaner.data):
                 line_length = len(self.cleaner.data[line_index])
                 self.line_info_label.config(text=f"Line {line_index + 1} length: {line_length} characters, Position: {char_index}")
+
+    def set_range_from_selection(self, event):
+        try:
+            start_idx = self.data_text.index(tk.SEL_FIRST)
+            end_idx = self.data_text.index(tk.SEL_LAST)
+            start_pos = int(start_idx.split('.')[1])
+            end_pos = int(end_idx.split('.')[1])
+            self.range_entry.delete(0, tk.END)
+            self.range_entry.insert(0, f"{start_pos}-{end_pos}")
+        except tk.TclError:
+            pass
 
 if __name__ == "__main__":
     root = tk.Tk()
