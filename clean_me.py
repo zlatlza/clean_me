@@ -46,12 +46,12 @@ class DataCleaner:
         self.data = [line for line in self.data if len(line.strip()) >= length]
         self.history.append(self.data.copy())
     
-    def set_delimiters_from_pattern(self, pattern, start, end):
-        regex = re.compile(rf"\s*{pattern}\s*")
+    def set_delimiters_in_range(self, start, end):
         for i, line in enumerate(self.data):
-            part_to_modify = line[start:end]
-            modified_part = regex.sub(self.delimiter, part_to_modify)
-            self.data[i] = line[:start] + modified_part + line[end:]
+            if len(line) >= end:
+                self.data[i] = line[:start] + self.delimiter + line[end:]
+            else:
+                self.data[i] = line[:start] + self.delimiter
         self.history.append(self.data.copy())
 
     def cleanse_range(self, start, end):
@@ -162,7 +162,7 @@ class DataCleanerApp:
         self.cleanse_short_lines_button = tk.Button(action_frame, text="Cleanse Short Lines", command=self.cleanse_short_lines)
         self.cleanse_short_lines_button.grid(row=0, column=2, padx=5)
         
-        self.set_delimiters_button = tk.Button(action_frame, text="Set Delimiters from Pattern", command=self.set_delimiters_from_pattern)
+        self.set_delimiters_button = tk.Button(action_frame, text="Set Delimiters in Range", command=self.set_delimiters_in_range)
         self.set_delimiters_button.grid(row=0, column=3, padx=5)
         
         self.cleanse_range_button = tk.Button(action_frame, text="Cleanse Range", command=self.cleanse_range)
@@ -198,20 +198,19 @@ class DataCleanerApp:
         self.cleaner.set_delimiter(delimiter)
         messagebox.showinfo("CLEAN ME!!!!!", f"Delimiter set to '{delimiter}'")
     
-    def set_delimiters_from_pattern(self):
-        pattern = self.pattern_entry.get()
+    def set_delimiters_in_range(self):
         range_str = self.range_entry.get()
         try:
             start, end = map(int, range_str.split('-'))
         except ValueError:
             messagebox.showerror("CLEAN ME!!!!!", "Please enter a valid range (start-end)")
             return
-        if pattern and start >= 0 and end > start:
-            self.cleaner.set_delimiters_from_pattern(pattern, start, end)
+        if start >= 0 and end > start:
+            self.cleaner.set_delimiters_in_range(start, end)
             self.update_main_textbox()
-            messagebox.showinfo("CLEAN ME!!!!!", f"Delimiters set from pattern '{pattern}' in range {start}-{end}")
+            messagebox.showinfo("CLEAN ME!!!!!", f"Delimiters set in range {start}-{end}")
         else:
-            messagebox.showerror("CLEAN ME!!!!!", "Please enter a valid pattern and range")
+            messagebox.showerror("CLEAN ME!!!!!", "Please enter a valid range")
     
     def cleanse_range(self):
         range_str = self.range_entry.get()
